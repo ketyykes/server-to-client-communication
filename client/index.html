@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>即時圖片訊息</title>
+		<style>
+			body {
+				font-family: "微軟正黑體", sans-serif;
+				margin: 0;
+				padding: 10px;
+				height: 100dvh;
+				box-sizing: border-box;
+				display: flex;
+				flex-direction: column;
+			}
+			h1 {
+				margin: 0 0 10px 0;
+				text-align: center;
+				flex-shrink: 0;
+			}
+			.container {
+				display: grid;
+				grid-template-columns: repeat(2, 1fr);
+				gap: 10px;
+				flex: 1;
+				overflow: hidden;
+				min-height: 0; /* 重要：允許容器縮小 */
+			}
+			.section {
+				text-align: center;
+				padding: 10px;
+				border: 1px solid #ddd;
+				border-radius: 8px;
+				display: flex;
+				flex-direction: column;
+				overflow: hidden;
+			}
+			.section h2 {
+				margin: 0 0 5px 0;
+				font-size: 1.2em;
+			}
+			.image-container {
+				flex: 1;
+				display: flex;
+				align-items: center;
+				justify-content: center;
+				min-height: 0; /* 重要：允許容器縮小 */
+				overflow: hidden;
+			}
+			img {
+				max-width: 100%;
+				max-height: 100%;
+				object-fit: contain;
+			}
+			.message {
+				font-size: 16px;
+				margin: 5px 0;
+			}
+			.lastUpdate {
+				color: #666;
+				font-size: 12px;
+				margin-top: 5px;
+			}
+			.status {
+				color: #4caf50;
+				margin-bottom: 5px;
+				font-size: 14px;
+			}
+		</style>
+	</head>
+	<body>
+		<h1>各種即時通訊方式比較</h1>
+		<div class="container">
+			<!-- SSE 區域 -->
+			<div class="section">
+				<h2>SSE 版本</h2>
+				<div id="sseStatus" class="status">等待連線...</div>
+				<div id="sseMessage" class="message"></div>
+				<div class="image-container">
+					<img id="sseImage" src="" alt="SSE 即時圖片" />
+				</div>
+				<div id="sseLastUpdate" class="lastUpdate"></div>
+			</div>
+
+			<!-- WebSocket 區域 -->
+			<div class="section">
+				<h2>WebSocket 版本</h2>
+				<div id="wsStatus" class="status">等待連線...</div>
+				<div id="wsMessage" class="message"></div>
+				<div class="image-container">
+					<img id="wsImage" src="" alt="WebSocket 即時圖片" />
+				</div>
+				<div id="wsLastUpdate" class="lastUpdate"></div>
+			</div>
+
+			<!-- Polling 區域 -->
+			<div class="section">
+				<h2>Polling 版本</h2>
+				<div id="pollingStatus" class="status">運行中...</div>
+				<div id="pollingMessage" class="message"></div>
+				<div class="image-container">
+					<img id="pollingImage" src="" alt="Polling 即時圖片" />
+				</div>
+				<div id="pollingLastUpdate" class="lastUpdate"></div>
+			</div>
+
+			<!-- Long Polling 區域 -->
+			<div class="section">
+				<h2>Long Polling 版本</h2>
+				<div id="longPollingStatus" class="status">運行中...</div>
+				<div id="longPollingMessage" class="message"></div>
+				<div class="image-container">
+					<img id="longPollingImage" src="" alt="Long Polling 即時圖片" />
+				</div>
+				<div id="longPollingLastUpdate" class="lastUpdate"></div>
+			</div>
+		</div>
+
+		<script>
+			// SSE 連線函式
+			function connectSSE() {
+				const eventSource = new EventSource("http://localhost:3000/events");
+				const statusDiv = document.getElementById("sseStatus");
+
+				eventSource.onopen = () => {
+					statusDiv.textContent = "SSE 已連線，等待更新...";
+				};
+
+				eventSource.onmessage = (event) => {
+					const data = JSON.parse(event.data);
+					document.getElementById("sseMessage").textContent = data.message;
+					document.getElementById("sseImage").src = data.imageUrl;
+					document.getElementById(
+						"sseLastUpdate"
+					).textContent = `更新時間：${new Date().toLocaleTimeString()}`;
+				};
+
+				eventSource.onerror = () => {
+					statusDiv.textContent = "SSE 連線中斷，嘗試重新連線...";
+					eventSource.close();
+					setTimeout(connectSSE, 5000);
+				};
+			}
+
+			// WebSocket 連線函式
+			function connectWebSocket() {
+				const ws = new WebSocket("ws://localhost:3000");
+				const statusDiv = document.getElementById("wsStatus");
+
+				ws.onopen = () => {
+					statusDiv.textContent = "WebSocket 已連線，等待更新...";
+				};
+
+				ws.onmessage = (event) => {
+					const data = JSON.parse(event.data);
+					document.getElementById("wsMessage").textContent = data.message;
+					document.getElementById("wsImage").src = data.imageUrl;
+					document.getElementById(
+						"wsLastUpdate"
+					).textContent = `更新時間：${new Date().toLocaleTimeString()}`;
+				};
+
+				ws.onclose = () => {
+					statusDiv.textContent = "WebSocket 連線中斷，嘗試重新連線...";
+					setTimeout(connectWebSocket, 5000);
+				};
+
+				ws.onerror = () => {
+					statusDiv.textContent = "WebSocket 發生錯誤";
+				};
+			}
+
+			// 一般 Polling 函式
+			function startPolling() {
+				const statusDiv = document.getElementById("pollingStatus");
+
+				async function poll() {
+					try {
+						const response = await fetch("http://localhost:3000/polling");
+						const data = await response.json();
+
+						document.getElementById("pollingMessage").textContent =
+							data.message;
+						document.getElementById("pollingImage").src = data.imageUrl;
+						document.getElementById(
+							"pollingLastUpdate"
+						).textContent = `更新時間：${new Date().toLocaleTimeString()}`;
+
+						statusDiv.textContent = "Polling 運行中...";
+					} catch (error) {
+						statusDiv.textContent = "Polling 發生錯誤，稍後重試...";
+					}
+
+					// 每 3 秒輪詢一次
+					setTimeout(poll, 3000);
+				}
+
+				poll();
+			}
+
+			// Long Polling 函式
+			function startLongPolling() {
+				const statusDiv = document.getElementById("longPollingStatus");
+
+				async function longPoll() {
+					try {
+						const response = await fetch("http://localhost:3000/long-polling");
+						const data = await response.json();
+
+						document.getElementById("longPollingMessage").textContent =
+							data.message;
+						document.getElementById("longPollingImage").src = data.imageUrl;
+						document.getElementById(
+							"longPollingLastUpdate"
+						).textContent = `更新時間：${new Date().toLocaleTimeString()}`;
+
+						statusDiv.textContent = "Long Polling 運行中...";
+					} catch (error) {
+						statusDiv.textContent = "Long Polling 發生錯誤，稍後重試...";
+						await new Promise((resolve) => setTimeout(resolve, 5000)); // 錯誤時等待 5 秒
+					}
+
+					// 立即發起下一次請求
+					longPoll();
+				}
+
+				longPoll();
+			}
+
+			// 頁面載入時啟動所有連線方式
+			connectSSE();
+			connectWebSocket();
+			startPolling();
+			startLongPolling();
+		</script>
+	</body>
+</html>
